@@ -1,0 +1,99 @@
+version: '3'
+
+services:
+
+### Workspace Utilities ##################################
+  workspace:
+    build:
+      context: ./.docker/workspace
+    restart: unless-stopped
+    volumes:
+      - ./.docker/workspace/php.ini:/usr/local/etc/php/php.ini
+      #/etc/php/8.1/cli/conf.d/20-xdebug.ini
+      - ./.docker/workspace/xdebug.ini:/usr/local/etc/php/conf.d/xdebug.ini
+      - /home/wysiwyg/projects/:/var/www/projects:cached
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "5173:5173"
+    tty: true
+    environment:
+      - PHP_IDE_CONFIG=serverName=laradock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      #- "dockerhost:172.20.0.1"
+
+### PHP-FPM ##############################################
+  app:
+    build:
+      context: ./.docker/php-fpm
+    restart: unless-stopped
+    expose:
+      - "9000"
+      - "9005"
+    environment:
+      - PHP_IDE_CONFIG=serverName=laradock
+    volumes:
+      #- ./.docker/php-fpm/php.ini:/usr/local/etc/php/php.ini
+      #- ./.docker/php-fpm/xdebug.ini:/usr/local/etc/php/conf.d/xdebug.ini
+      - /home/wysiwyg/projects/:/var/www/projects:cached
+    depends_on:
+      - db
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      #- "dockerhost:172.20.0.1"
+
+### NGINX Server #########################################
+  nginx:
+    build:
+      context: ./.docker/nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - app
+    volumes:
+      - /home/wysiwyg/projects/:/var/www/projects:cached
+      - ./.docker/sites:/etc/nginx/sites-available
+      - ./logs/nginx/:/var/log/nginx
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      #- "dockerhost:172.20.0.1"
+
+### MariaDB ##############################################
+  db:
+    image: mariadb:10.4
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: crater
+      MYSQL_DATABASE: crater
+      MYSQL_USER: crater
+      MYSQL_PASSWORD: crater
+    ports:
+      - '3306:3306'
+    volumes:
+      - ~/laradock/data/mariadb:/var/lib/mysql
+
+  ### phpMyAdmin ###########################################
+  phpmyadmin:
+    image: phpmyadmin
+    restart: unless-stopped
+    depends_on:
+      - db
+    links:
+      - db
+    volumes:
+      - ./.docker/phpmyadmin/config.user.inc.php:/etc/phpmyadmin/config.user.inc.php
+      - ./.docker/databases:/var/www/html/tmp/dofroscra_databases
+    environment:
+      - PMA_HOST=db
+      - PMA_ROOT_PASSWORD=root
+      - PMA_USER=test
+      - PMA_PASSWORD=test
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_PASSWORD=test
+      - MYSQL_DATABASE=stack_db
+      - MAX_EXECUTION_TIME=600
+      - MEMORY_LIMIT=256M
+      - UPLOAD_LIMIT=2G
+    ports:
+      - "8026:80"
